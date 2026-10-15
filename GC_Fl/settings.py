@@ -90,6 +90,7 @@ WSGI_APPLICATION = 'GC_Fl.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# CONFIGURACION DE DATABASE
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -142,7 +143,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-
+# RENDER
 if not DEBUG:
     # Tell Django to copy static assets into a path called `staticfiles` (this is specific to Render)
     STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
@@ -152,5 +153,16 @@ if not DEBUG:
     STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
-# En desarrollo, los correos de recuperación de contraseña se imprimiran en la consola
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# CONFIGURACION DE CORREOS
+if DEBUG:
+    # Local: los correos se imprimen en la consola
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    # Produccion: se mandan correos por Gmail
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = config('EMAIL_HOST_USER') 
+    EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD')
+    DEFAULT_FROM_EMAIL = f"ERP GC-FL <{EMAIL_HOST_USER}>"
