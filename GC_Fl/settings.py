@@ -91,20 +91,30 @@ WSGI_APPLICATION = 'GC_Fl.wsgi.application'
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
 # CONFIGURACION DE DATABASE
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT', cast=int),
-        'OPTIONS': {
-            'sslmode': 'require',
-            # 'sslrootcert': os.path.join(BASE_DIR, 'supabase.crt' / Si fuera necesario mas seguridad
+if DEBUG:
+    # Entorno Local: Usamos SQLite3
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-}
+else:
+    # Entorno de Producción (Render): Usamos PostgreSQL (Supabase)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME'),
+            'USER': config('DB_USER'),
+            'PASSWORD': config('DB_PASSWORD'),
+            'HOST': config('DB_HOST'),
+            'PORT': config('DB_PORT', cast=int),
+            'OPTIONS': {
+                'sslmode': 'require',
+                # 'sslrootcert': os.path.join(BASE_DIR, 'supabase.crt' / Si fuera necesario mas seguridad
+            }
+        }
+    }
 
 
 # Password validation

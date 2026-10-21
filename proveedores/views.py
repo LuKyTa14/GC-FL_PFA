@@ -9,20 +9,16 @@ import csv
 from .models import Proveedor
 from .forms import ProveedorForm
 from users.models import UserRole
+from users.decorators import requiere_permiso
 
-@login_required
+# --- LISTA DE PROVEEDORES
+@requiere_permiso(modulo='proveedores', nivel_minimo=1)
 def proveedores_list(request):
-    # VALIDACIÓN DE PERMISOS
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
-        max_permission=models.Max('role__proveedores')
-    )['max_permission'] or 0
+    # Calculamos el permiso solo para pasarlo al HTML 
+    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__proveedores'))['max_permission'] or 0
 
-    if max_permission == 0:
-        messages.error(request, 'No tienes acceso al módulo de Proveedores.')
-        return redirect('dashboard')
-
-    # LÓGICA BASE Y BUSCADOR INTELIGENTE
-    proveedores = Proveedor.objects.all()
+    # BUSCADOR INTELIGENTE
+    proveedores = Proveedor.objects.filter(activo=True)
 
     criterio = request.GET.get('criterio', 'nombre')
     q = request.GET.get('q', '').strip()
@@ -96,16 +92,9 @@ def proveedores_list(request):
     return render(request, 'proveedores/proveedores_list.html', context)
 
 
-@login_required
+# --- CREAR PROVEEDOR
+@requiere_permiso(modulo='proveedores', nivel_minimo=2)
 def proveedor_create(request):
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
-        max_permission=models.Max('role__proveedores')
-    )['max_permission'] or 0
-
-    if max_permission < 2:
-        messages.error(request, 'No tienes permisos para crear proveedores.')
-        return redirect('proveedores:proveedores_list')
-
     if request.method == 'POST':
         form = ProveedorForm(request.POST)
         if form.is_valid():
@@ -117,18 +106,10 @@ def proveedor_create(request):
 
     return render(request, 'proveedores/proveedor_form.html', {'form': form, 'accion': 'Crear'})
 
-
-@login_required
+# --- EDITAR PROVEEDOR
+@requiere_permiso(modulo='proveedores', nivel_minimo=2)
 def proveedor_edit(request, pk):
     proveedor = get_object_or_404(Proveedor, pk=pk)
-
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
-        max_permission=models.Max('role__proveedores')
-    )['max_permission'] or 0
-
-    if max_permission < 2:
-        messages.error(request, 'No tienes permisos para editar proveedores.')
-        return redirect('proveedores:proveedores_list')
 
     if request.method == 'POST':
         form = ProveedorForm(request.POST, instance=proveedor)
@@ -148,21 +129,15 @@ def proveedor_edit(request, pk):
     return render(request, 'proveedores/proveedor_form.html', context)
 
 
-@login_required
+# --- ELIMINAR PROVEEDOR
+@requiere_permiso(modulo='proveedores', nivel_minimo=2)
 def proveedor_delete(request, pk):
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
-        max_permission=models.Max('role__proveedores')
-    )['max_permission'] or 0
-
-    if max_permission < 2:
-        messages.error(request, 'No tienes permisos para eliminar proveedores.')
-        return redirect('proveedores:proveedores_list')
-
     proveedor = get_object_or_404(Proveedor, pk=pk)
 
     if request.method == 'POST':
-        proveedor.delete()
-        messages.success(request, 'Proveedor eliminado exitosamente.')
-        return redirect('proveedores:proveedores_list')
-
+        # En vez de .delete(), apagamos el interruptor
+        proveedor.activo = False
+        proveedor.save()
+        messages.success(request, 'Proveedor desactivado exitosamente.')
+        
     return redirect('proveedores:proveedores_list')

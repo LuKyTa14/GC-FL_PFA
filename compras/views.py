@@ -9,11 +9,14 @@ from .forms import CompraForm, DetalleCompraForm
 from users.models import UserRole
 from inventario.models import Inventario
 from inventario.forms import ProductoForm
+from users.decorators import requiere_permiso
 
-@login_required
+
+# --- LISTA DE COMPRAS
+@requiere_permiso(modulo='compras', nivel_minimo=1)
 def compras_list(request):
+    # Calculamos el permiso solo para pasarlo al HTML
     max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__compras'))['max_permission'] or 0
-    if max_permission == 0: return redirect('dashboard')
 
     compras = Compra.objects.all()
 
@@ -37,11 +40,9 @@ def compras_list(request):
     })
 
 
-@login_required
+# --- CREAR COMPRA
+@requiere_permiso(modulo='compras', nivel_minimo=2)
 def compra_create(request):
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__compras'))['max_permission'] or 0
-    if max_permission < 2: return redirect('compras:compras_list')
-
     if request.method == 'POST':
         form = CompraForm(request.POST)
         if form.is_valid():
@@ -54,10 +55,15 @@ def compra_create(request):
     return render(request, 'compras/compra_form.html', {'form': form})
 
 
-@login_required
+# --- DETALLE DE COMPRA
+@requiere_permiso(modulo='compras', nivel_minimo=1)
 def compra_detalle(request, pk):
     compra = get_object_or_404(Compra, pk=pk)
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__compras'))['max_permission'] or 0
+    
+    # Lo calculamos porque lo usamos para bloquear las acciones POST y para ocultar botones en el HTML
+    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
+        max_permission=models.Max('role__compras')
+    )['max_permission'] or 0
     
     if request.method == 'POST' and max_permission >= 2 and compra.estado == 'PENDIENTE':
         
@@ -123,8 +129,9 @@ def compra_detalle(request, pk):
         'max_permission': max_permission
     })
 
-# --- VISTA: COPIA DE CREAR PRODUCTO PERO DESDE COMPRAS ---
-@login_required
+
+# --- CREAR PRODUCTO RAPIDO DESDE COMPRAS
+@requiere_permiso(modulo='compras', nivel_minimo=2)
 def producto_rapido_desde_compra(request, compra_pk):
     compra = get_object_or_404(Compra, pk=compra_pk)
 
@@ -133,7 +140,7 @@ def producto_rapido_desde_compra(request, compra_pk):
         datos = request.POST.copy()
         datos['precio_costo'] = 0
         datos['precio_venta'] = 0
-        datos['activo'] = True # Por si tu modelo exige este campo
+        datos['activo'] = True 
         
         form = ProductoForm(datos)
         
@@ -151,8 +158,9 @@ def producto_rapido_desde_compra(request, compra_pk):
 
     return render(request, 'compras/producto_crear_agil.html', {'form': form, 'compra': compra})
 
-# --- NUEVAS VISTAS PARA FINALIZAR O CANCELAR ---
-@login_required
+
+# --- FINALIZAR COMPRA 
+@requiere_permiso(modulo='compras', nivel_minimo=2)
 def compra_finalizar(request, pk):
     compra = get_object_or_404(Compra, pk=pk)
     if request.method == 'POST' and compra.estado == 'PENDIENTE':
@@ -172,7 +180,9 @@ def compra_finalizar(request, pk):
             messages.success(request, f'Compra #{compra.id} finalizada. Stock ingresado al sistema.')
     return redirect('compras:compras_list')
 
-@login_required
+
+# --- CANCELAR/ELIMINAR COMPRA
+@requiere_permiso(modulo='compras', nivel_minimo=2)
 def compra_cancelar(request, pk):
     compra = get_object_or_404(Compra, pk=pk)
     if request.method == 'POST' and compra.estado == 'PENDIENTE':
@@ -180,7 +190,8 @@ def compra_cancelar(request, pk):
         messages.success(request, 'Compra cancelada y eliminada correctamente.')
     return redirect('compras:compras_list')
 
-# Comprobante
-@login_required
+
+# --- COMPROBANTE DE COMPRA
+@requiere_permiso(modulo='compras', nivel_minimo=1)
 def compra_comprobante(request, pk):
     return render(request, 'compras/compra_comprobante.html', {'compra': get_object_or_404(Compra, pk=pk)})

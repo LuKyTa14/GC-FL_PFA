@@ -10,13 +10,13 @@ from users.models import UserRole
 from inventario.models import Producto, Inventario
 from clientes.models import MovimientoCuentaCorriente, Cliente
 from core.models import Sucursal
+from users.decorators import requiere_permiso
 
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=1)
 def ventas_list(request):
     max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__ventas'))['max_permission'] or 0
-    if max_permission == 0: return redirect('dashboard')
 
-    # MAGIA: Excluimos las ventas canceladas. Solo se verán en el panel de administrador.
+    # Excluimos las ventas canceladas. Solo se verán en el panel de administrador.
     ventas = Venta.objects.exclude(estado='CANCELADA')
 
     ticket_q = request.GET.get('ticket')
@@ -45,7 +45,7 @@ def ventas_list(request):
     })
 
 # --- CREAR VENTA
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=2)
 def venta_create(request):
     # En vez de pedir datos en otra pantalla, creamos el "carrito" al instante
     sucursal_default = Sucursal.objects.first()
@@ -53,7 +53,7 @@ def venta_create(request):
     return redirect('ventas:venta_detalle', pk=venta.pk)
 
 # --- DETALLE VENTA
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=1)
 def venta_detalle(request, pk):
     venta = get_object_or_404(Venta, pk=pk)
     
@@ -136,7 +136,7 @@ def venta_detalle(request, pk):
     return render(request, 'ventas/venta_detalle.html', context)
 
 # --- VENTA FINALIZAR
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=2)
 def venta_finalizar(request, pk):
     venta = get_object_or_404(Venta, pk=pk)
     
@@ -185,7 +185,7 @@ def venta_finalizar(request, pk):
     return redirect('ventas:ventas_list')
 
 # --- CANCELAR VENTA
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=2)
 def venta_cancelar(request, pk):
     venta = get_object_or_404(Venta, pk=pk)
     if venta.estado == 'PENDIENTE':
@@ -195,6 +195,6 @@ def venta_cancelar(request, pk):
     return redirect('ventas:ventas_list')
 
 # --- COMPROBANTE VENTA
-@login_required
+@requiere_permiso(modulo='ventas', nivel_minimo=1)
 def venta_comprobante(request, pk):
     return render(request, 'ventas/venta_comprobante.html', {'venta': get_object_or_404(Venta, pk=pk)})

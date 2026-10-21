@@ -29,6 +29,7 @@ class Proveedor(models.Model):
     cbu_alias = models.CharField(max_length=100, blank=True, null=True)
 
     fecha_registro = models.DateTimeField(auto_now_add=True)
+    activo = models.BooleanField(default=True)
 
     class Meta:
         db_table = 'proveedores'

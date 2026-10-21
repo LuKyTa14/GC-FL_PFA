@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, Q
+from django.db import models
 from django.utils import timezone
 from django.contrib import messages
 
@@ -9,12 +10,15 @@ from clientes.models import Cliente, MovimientoCuentaCorriente
 from ventas.models import Venta, PagoVenta
 from contabilidad.models import CierreCaja
 from core.models import Sucursal
+from users.models import UserRole
+from users.decorators import requiere_permiso
 
-@login_required
+# --- DASHBOARD DE CONTABILIDAD
+@requiere_permiso(modulo='contabilidad', nivel_minimo=1)
 def dashboard_contabilidad(request):
     hoy = timezone.now()
     
-    # 1. INGRESOS REALES (Ahora miramos PagoVenta en vez de Venta)
+    # 1. INGRESOS REALES
     pagos_ventas_mes = PagoVenta.objects.filter(
         venta__fecha_venta__year=hoy.year, 
         venta__fecha_venta__month=hoy.month, 
@@ -42,7 +46,7 @@ def dashboard_contabilidad(request):
     total_efectivo = efectivo_ventas + efectivo_cc
     total_digital = ingresos_reales - total_efectivo
 
-    # (Lo de Plata en Calle y Gastos queda igual que lo tenías)
+    # 3. CREDITOS Y GASTOS
     dinero_en_credito = Cliente.objects.filter(saldo_cuenta_corriente__gt=0).aggregate(total=Sum('saldo_cuenta_corriente'))['total'] or Decimal('0.00')
     gastos_caja_mes = CierreCaja.objects.filter(fecha_cierre__year=hoy.year, fecha_cierre__month=hoy.month).aggregate(total=Sum('efectivo_usado'))['total'] or Decimal('0.00')
 
@@ -57,7 +61,8 @@ def dashboard_contabilidad(request):
     return render(request, 'contabilidad/dashboard_contabilidad.html', context)
 
 
-@login_required
+# --- CREAR CIERRE DE CAJA
+@requiere_permiso(modulo='contabilidad', nivel_minimo=2)
 def cierre_caja_create(request):
     if request.method == 'POST':
         sucursal_id = request.POST.get('sucursal')
@@ -78,8 +83,8 @@ def cierre_caja_create(request):
             debito=Sum('monto', filter=Q(metodo_pago='DEBITO')),
             credito=Sum('monto', filter=Q(metodo_pago='CREDITO')),
             transfer=Sum('monto', filter=Q(metodo_pago='TRANSFERENCIA')),
-            mpago=Sum('monto', filter=Q(metodo_pago='BILLETERA_VIRTUAL')), # Nombre nuevo
-            otros=Sum('monto', filter=Q(metodo_pago='OTROS')) # Nuevo
+            mpago=Sum('monto', filter=Q(metodo_pago='BILLETERA_VIRTUAL')), 
+            otros=Sum('monto', filter=Q(metodo_pago='OTROS')) 
         )
 
         # 2. SUMAMOS LOS COBROS DE CUENTA CORRIENTE
@@ -109,7 +114,7 @@ def cierre_caja_create(request):
             total_tarjeta_credito=sumar('credito'),
             total_transferencia=sumar('transfer'),
             total_billetera_virtual=sumar('mpago'),
-            total_otros=sumar('otros'), # <-- Guardamos el nuevo
+            total_otros=sumar('otros'), 
             
             efectivo_declarado=Decimal(request.POST.get('efectivo_declarado', '0.00')),
             efectivo_usado=Decimal(request.POST.get('efectivo_usado', '0.00')),
@@ -122,13 +127,17 @@ def cierre_caja_create(request):
 
     return render(request, 'contabilidad/cierre_form.html', {'sucursales': Sucursal.objects.all()})
 
-@login_required
+
+# --- HISTORIAL DE CIERRES
+@requiere_permiso(modulo='contabilidad', nivel_minimo=2)
 def historial_cierres(request):
     # Traemos todos los cierres de TODAS las sucursales
     cierres = CierreCaja.objects.all().order_by('-fecha_cierre')
     return render(request, 'contabilidad/historial_cierres.html', {'cierres': cierres})
 
-@login_required
+
+# --- IMPRIMIR ARQUEO
+@requiere_permiso(modulo='contabilidad', nivel_minimo=2)
 def imprimir_arqueo(request, cierre_id):
     cierre = get_object_or_404(CierreCaja, id=cierre_id)
     ventas_del_turno = Venta.objects.filter(

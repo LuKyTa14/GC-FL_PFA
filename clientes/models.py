@@ -28,6 +28,7 @@ class Cliente(models.Model):
 
     # Guardamos fecha de regristro 
     fecha_registro = models.DateTimeField(auto_now_add=True)
+    activo = models.BooleanField(default=True)
 
     # --- CAMPO PARA LA CUENTA CORRIENTE 
     # Saldo positivo significa que el cliente debe plata. Saldo cero, esta al dia.

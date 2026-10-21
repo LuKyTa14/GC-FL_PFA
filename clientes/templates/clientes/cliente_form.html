@@ -67,22 +67,26 @@
             <!-- BLOQUE 3: UBICACIÓN -->
             <h3 class="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wider">Ubicación</h3>
 
-            <div class="flex flex-col md:flex-row md:items-center">
+            <!-- Provincia (Buscador Inteligente) -->
+            <div class="flex flex-col md:flex-row md:items-center mb-4">
                 <label class="w-full md:w-1/3 text-sm font-medium text-gray-700 mb-1 md:mb-0">Provincia</label>
-                <input type="text" name="provincia" value="{{ form.provincia.value|default_if_none:'' }}" class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]" required>
+                <input type="text" list="lista_provincias" name="provincia" id="provincia_input" value="{{ form.provincia.value|default_if_none:'' }}" placeholder="Escribí para buscar..." class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]" required autocomplete="off">
+                <datalist id="lista_provincias"></datalist>
             </div>
 
-            <div class="flex flex-col md:flex-row md:items-center">
+            <!-- Localidad (Buscador Inteligente) -->
+            <div class="flex flex-col md:flex-row md:items-center mb-4">
                 <label class="w-full md:w-1/3 text-sm font-medium text-gray-700 mb-1 md:mb-0">Localidad</label>
-                <input type="text" name="localidad" value="{{ form.localidad.value|default_if_none:'' }}" class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]" required>
+                <input type="text" list="lista_localidades" name="localidad" id="localidad_input" value="{{ form.localidad.value|default_if_none:'' }}" placeholder="Escribí para buscar..." class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]" required autocomplete="off">
+                <datalist id="lista_localidades"></datalist>
             </div>
 
-            <div class="flex flex-col md:flex-row md:items-center">
+            <div class="flex flex-col md:flex-row md:items-center mb-4">
                 <label class="w-full md:w-1/3 text-sm font-medium text-gray-700 mb-1 md:mb-0">Dirección</label>
                 <input type="text" name="direccion" value="{{ form.direccion.value|default_if_none:'' }}" class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]" required>
             </div>
 
-            <div class="flex flex-col md:flex-row md:items-center">
+            <div class="flex flex-col md:flex-row md:items-center mb-4">
                 <label class="w-full md:w-1/3 text-sm font-medium text-gray-700 mb-1 md:mb-0">Barrio <span class="text-gray-400 font-normal">(Opcional)</span></label>
                 <input type="text" name="barrio" value="{{ form.barrio.value|default_if_none:'' }}" class="w-full md:w-2/3 border border-gray-300 rounded-md py-2 px-3 focus:outline-none focus:border-[#2a4365] focus:ring-1 focus:ring-[#2a4365]">
             </div>
@@ -103,4 +107,87 @@
             </div>
         </form>
     </div>
+
+
+<!-- SCRIPT PARA ENLAZAR LAS PROVINCIAS BD RENAPER -->
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const provInput = document.getElementById('provincia_input');
+    const locInput = document.getElementById('localidad_input');
+    const listaProvincias = document.getElementById('lista_provincias');
+    const listaLocalidades = document.getElementById('lista_localidades');
+    
+    // Arrays para guardar la lista oficial y comparar después
+    let provinciasPermitidas = [];
+    let localidadesPermitidas = [];
+    
+    // Función reutilizable para buscar localidades
+    function cargarLocalidades(provinciaNombre) {
+        locInput.placeholder = "Cargando localidades...";
+        listaLocalidades.innerHTML = ''; 
+        localidadesPermitidas = []; // Reseteamos la lista permitida
+        
+        fetch(`https://apis.datos.gob.ar/georef/api/localidades?provincia=${provinciaNombre}&campos=id,nombre&max=2000`)
+            .then(response => response.json())
+            .then(data => {
+                let localidades = data.localidades.sort((a, b) => a.nombre.localeCompare(b.nombre));
+                localidades.forEach(loc => {
+                    listaLocalidades.innerHTML += `<option value="${loc.nombre}">`;
+                    localidadesPermitidas.push(loc.nombre); // Guardamos en secreto
+                });
+                locInput.placeholder = "Escribí para buscar...";
+            })
+            .catch(error => {
+                locInput.placeholder = "Error al cargar la lista";
+            });
+    }
+
+    // 1. Cargar las provincias al iniciar
+    fetch('https://apis.datos.gob.ar/georef/api/provincias?campos=id,nombre&max=100')
+        .then(response => response.json())
+        .then(data => {
+            let provincias = data.provincias.sort((a, b) => a.nombre.localeCompare(b.nombre));
+            listaProvincias.innerHTML = '';
+            provincias.forEach(prov => {
+                listaProvincias.innerHTML += `<option value="${prov.nombre}">`;
+                provinciasPermitidas.push(prov.nombre); // Guardamos en secreto
+            });
+            
+            // Si estamos EDITANDO y ya hay una provincia
+            if (provInput.value) {
+                cargarLocalidades(provInput.value);
+            }
+        });
+
+    // 2. VALIDACIÓN ESTRICTA DE PROVINCIA
+    provInput.addEventListener('change', function() {
+        // Si lo que escribió no está en la lista oficial...
+        if (this.value !== "" && !provinciasPermitidas.includes(this.value)) {
+            this.setCustomValidity("Debes seleccionar una provincia válida de la lista.");
+            this.reportValidity(); // Muestra el cartelito rojo de error
+            this.value = ''; // Le borramos el error para obligarlo a elegir bien
+            locInput.value = '';
+            listaLocalidades.innerHTML = '';
+        } else {
+            this.setCustomValidity(""); // Todo OK
+            locInput.value = ''; 
+            if (this.value) {
+                cargarLocalidades(this.value);
+            }
+        }
+    });
+
+    // 3. VALIDACIÓN ESTRICTA DE LOCALIDAD
+    locInput.addEventListener('change', function() {
+        // Si lo que escribió no está en la lista oficial...
+        if (this.value !== "" && !localidadesPermitidas.includes(this.value)) {
+            this.setCustomValidity("Debes seleccionar una localidad válida de la lista.");
+            this.reportValidity(); // Muestra el cartelito rojo de error
+            this.value = ''; // Le borramos la palabra mal escrita
+        } else {
+            this.setCustomValidity(""); // Todo OK
+        }
+    });
+});
+</script>
 {% endblock content %}

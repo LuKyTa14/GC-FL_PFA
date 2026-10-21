@@ -10,17 +10,15 @@ from core.models import Sucursal
 from .models import Producto, Inventario
 from .forms import ProductoForm
 from users.models import UserRole
+from users.decorators import requiere_permiso
 
-@login_required
+# --- LISTA DE PRODUCTOS
+@requiere_permiso(modulo='inventario', nivel_minimo=1)
 def productos_list(request):
-    # VALIDACIÓN DE PERMISOS
+    # Calculamos el permiso solo para pasarlo al HTML y ocultar botones si es nivel 1
     max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
         max_permission=models.Max('role__inventario')
     )['max_permission'] or 0
-
-    if max_permission == 0:
-        messages.error(request, 'No tienes acceso al módulo de Inventario.')
-        return redirect('dashboard')
 
     # LOGICA BASE Y BUSCADOR INTELIGENTE
     productos = Producto.objects.all()
@@ -38,7 +36,7 @@ def productos_list(request):
         elif criterio == 'marca':
             productos = productos.filter(marca__icontains=q)
         elif criterio == 'categoria':
-            productos = productos.filter(categoria__icontains=q) # Ajustado a tu modelo original
+            productos = productos.filter(categoria__icontains=q)
 
     # Aplicar ordenamiento
     orden_opciones = {
@@ -50,7 +48,7 @@ def productos_list(request):
     orden_db = orden_opciones.get(orden, 'nombre')
     productos = productos.order_by(orden_db)
 
-    # 3. EXPORTACIoN A CSV 
+    # EXPORTACION A CSV 
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="inventario.csv"'
@@ -59,7 +57,6 @@ def productos_list(request):
 
         writer.writerow(['Código', 'Marca', 'Nombre', 'Categoría', 'Precio Costo', 'Precio Venta', 'Stock Total', 'Estado'])
 
-        # Fíjate que itera sobre "productos" (que ya está filtrado y ordenado por el código de arriba)
         for prod in productos:
             writer.writerow([
                 prod.codigo,
@@ -73,17 +70,15 @@ def productos_list(request):
             ])
         return response
 
-    # 4. PAGINACION
+    # PAGINACION
     paginator = Paginator(productos, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
-    # CONTEXTO Y RENDER
+
     context = {
         'page_obj': page_obj,
         'max_permission': max_permission,
-        
-        # Le pasamos las variables nuevas al HTML para que la barra no se borre
         'criterio_actual': criterio,
         'q_actual': q,
         'orden_actual': orden,
@@ -91,12 +86,8 @@ def productos_list(request):
     return render(request, 'inventario/productos_list.html', context)
 
 
-# --- CREAR PRODUCTO
-@login_required
+@requiere_permiso(modulo='inventario', nivel_minimo=2)
 def producto_create(request):
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__inventario'))['max_permission'] or 0
-    if max_permission < 2: return redirect('inventario:productos_list')
-
     if request.method == 'POST':
         form = ProductoForm(request.POST)
         if form.is_valid():
@@ -117,12 +108,11 @@ def producto_create(request):
 
     return render(request, 'inventario/producto_form.html', {'form': form, 'accion': 'Crear', 'sucursales_data': sucursales_data})
 
+
 # --- EDITAR PRODUCTO
-@login_required
+@requiere_permiso(modulo='inventario', nivel_minimo=2)
 def producto_edit(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__inventario'))['max_permission'] or 0
-    if max_permission < 2: return redirect('inventario:productos_list')
 
     if request.method == 'POST':
         form = ProductoForm(request.POST, instance=producto)
@@ -148,13 +138,10 @@ def producto_edit(request, pk):
     return render(request, 'inventario/producto_form.html', {'form': form, 'accion': 'Editar', 'producto': producto, 'sucursales_data': sucursales_data})
 
 
-# --- ACTUALIZAR SOLO STOCK 
-@login_required
-@login_required
+# --- ACTUALIZAR SOLO STOCK Y PRECIOS
+@requiere_permiso(modulo='inventario', nivel_minimo=2)
 def stock_update(request, pk):
     producto = get_object_or_404(Producto, pk=pk)
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(max_permission=models.Max('role__inventario'))['max_permission'] or 0
-    if max_permission < 2: return redirect('inventario:productos_list')
 
     if request.method == 'POST':
         # Actualizar Precios primero
@@ -184,39 +171,30 @@ def stock_update(request, pk):
 
     return render(request, 'inventario/stock_form.html', {'producto': producto, 'sucursales_data': sucursales_data})
 
+
 # --- ELIMINAR PRODUCTO
-@login_required
+@requiere_permiso(modulo='inventario', nivel_minimo=2)
 def producto_delete(request, pk):
-    max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
-        max_permission=models.Max('role__inventario')
-    )['max_permission'] or 0
-
-    if max_permission < 2:
-        messages.error(request, 'No tienes permisos para eliminar productos.')
-        return redirect('inventario:productos_list')
-
     producto = get_object_or_404(Producto, pk=pk)
+    
     if request.method == 'POST':
         producto.delete()
         messages.success(request, 'Producto eliminado exitosamente.')
         
     return redirect('inventario:productos_list')
 
-# --- VER HISTORIA DE PRECIOS DEL PRODUCTO
-@login_required
+
+# --- VER HISTORIAL DE PRECIOS DEL PRODUCTO
+@requiere_permiso(modulo='inventario', nivel_minimo=1)
 def historial_precios(request, pk):
-    # Validamos que el usuario tenga al menos permiso de lectura (1 o más)
+    # Calculamos para el HTML
     max_permission = UserRole.objects.filter(user_id=request.user).aggregate(
         max_permission=models.Max('role__inventario')
     )['max_permission'] or 0
 
-    if max_permission < 1:
-        messages.error(request, 'No tienes permisos para ver el historial de precios.')
-        return redirect('inventario:productos_list')
-
     producto = get_object_or_404(Producto, pk=pk)
     
-    # Traemos todo el historial ordenado (el modelo ya lo ordena por -fecha_desde)
+    # Traemos todo el historial ordenado
     historial = producto.historial_precios.all()
 
     return render(request, 'inventario/historial_precios.html', {

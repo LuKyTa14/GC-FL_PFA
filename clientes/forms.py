@@ -4,4 +4,4 @@ from .models import Cliente
 class ClienteForm(forms.ModelForm):
     class Meta:
         model = Cliente
-        fields = '__all__' # Acepta todos los campos del modelo Cliente
+        exclude = ['activo', 'saldo_cuenta_corriente']
